@@ -1,0 +1,17 @@
+TaskID,TaskName,Category,Duration,RequiredSkills,PreferredPhases,MaxConcurrent
+T001,Data Pipeline Setup,Infrastructure,2,"Python,SQL,ETL","[1,2]",1
+T002,Frontend Dashboard,Development,3,"JavaScript,React,UX","[2,3,4]",2
+T003,ML Model Training,Analytics,4,"Python,MachineLearning,Statistics","[1,2,3]",1
+T004,API Development,Development,2,"JavaScript,NodeJS","[2,3]",3
+T005,Database Migration,Infrastructure,1,"SQL,DataWarehouse","[1]",1
+T006,User Research,Research,2,"UX,Research","[1,2]",2
+T007,System Integration,Infrastructure,3,"Java,Microservices,DevOps","[3,4,5]",1
+T008,Quality Assurance,Testing,2,"QA,Testing,Automation","[4,5]",2
+T009,Client Onboarding,Sales,1,"Sales,ClientRelations","[1,5]",3
+T010,Performance Optimization,Development,2,"Python,SQL","[3,4]",2
+T011,Security Audit,Security,3,"DevOps,Security","[2,3,4]",1
+T012,Bug Fixes,Maintenance,1,"JavaScript,QA","[1,2,3,4,5]",4
+T013,Documentation,Documentation,1,"Communication,Technical Writing","[4,5]",3
+T014,Training Program,Training,2,"ProjectManagement,Communication","[3,4]",2
+T015,Brand Design,Creative,2,"UI,Figma","[1,2]",1
+T016,Marketing Campaign,Marketing,3,"Creative,Communication","[2,3,4]",2

@@ -1,0 +1,9 @@
+ClientID,ClientName,PriorityLevel,RequestedTaskIDs,GroupTag,AttributesJSON
+C001,Acme Corp,5,"T001,T003,T007",Enterprise,"{""budget"": 50000, ""deadline"": ""2024-03-15""}"
+C002,TechStart Inc,3,"T002,T004",Startup,"{""budget"": 15000, ""flexible"": true}"
+C003,Global Solutions,4,"T001,T005,T006",Enterprise,"{""budget"": 75000, ""priority_tasks"": [""T001""]}"
+C004,Local Business,2,"T008,T009",SMB,"{""budget"": 8000, ""location"": ""downtown""}"
+C005,Innovation Labs,5,"T003,T010,T011",Research,"{""budget"": 100000, ""experimental"": true}"
+C006,Quick Fix LLC,1,"T012",SMB,"{""budget"": 3000, ""urgent"": false}"
+C007,MegaCorp Industries,5,"T001,T002,T013,T014",Enterprise,"{""budget"": 200000, ""multi_phase"": true}"
+C008,Creative Agency,3,"T015,T016",Creative,"{""budget"": 25000, ""creative_focus"": true}"
