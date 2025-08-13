@@ -33,9 +33,10 @@ interface UploadedFile {
 
 interface DataUploadProps {
   onDataUploaded: (type: "clients" | "workers" | "tasks", data: any[]) => void
+  geminiApiKey?: string // Added geminiApiKey prop for AI-powered header mapping
 }
 
-export function DataUpload({ onDataUploaded }: DataUploadProps) {
+export function DataUpload({ onDataUploaded, geminiApiKey }: DataUploadProps) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -82,10 +83,26 @@ export function DataUpload({ onDataUploaded }: DataUploadProps) {
     return "clients"
   }
 
-  const aiColumnMapping = (headers: string[], expectedCols: string[]): { [key: string]: string } => {
+  const aiColumnMapping = async (
+    headers: string[],
+    expectedCols: string[],
+    fileType: string,
+  ): Promise<{ [key: string]: string }> => {
     const mappings: { [key: string]: string } = {}
 
-    // Simple AI-like mapping based on similarity and common patterns
+    // Try Gemini AI first if API key is available
+    if (geminiApiKey) {
+      try {
+        const geminiMappings = await getGeminiHeaderMappings(headers, expectedCols, fileType)
+        if (geminiMappings && Object.keys(geminiMappings).length > 0) {
+          return geminiMappings
+        }
+      } catch (error) {
+        console.log("Gemini mapping failed, falling back to local algorithm:", error)
+      }
+    }
+
+    // Enhanced local algorithm with better pattern matching
     headers.forEach((header) => {
       const cleanHeader = header.toLowerCase().replace(/[^a-z0-9]/g, "")
 
@@ -98,29 +115,121 @@ export function DataUpload({ onDataUploaded }: DataUploadProps) {
           return
         }
 
-        // Partial matches and common variations
-        const variations: { [key: string]: string[] } = {
-          clientid: ["id", "clientid", "client_id", "customerid"],
-          clientname: ["name", "clientname", "client_name", "customername"],
-          prioritylevel: ["priority", "prioritylevel", "priority_level", "importance"],
-          workerid: ["id", "workerid", "worker_id", "employeeid", "staffid"],
-          workername: ["name", "workername", "worker_name", "employeename"],
-          skills: ["skills", "skill", "capabilities", "expertise"],
-          availableslots: ["slots", "availableslots", "available_slots", "availability"],
-          taskid: ["id", "taskid", "task_id", "jobid"],
-          taskname: ["name", "taskname", "task_name", "jobname"],
-          duration: ["duration", "time", "length", "hours"],
-          requiredskills: ["skills", "requiredskills", "required_skills", "needs"],
+        // Enhanced pattern matching with regex and similarity scoring
+        const patterns: { [key: string]: RegExp[] } = {
+          clientid: [/^(client|customer|cust)_?id$/i, /^id$/i, /^c_?id$/i],
+          clientname: [/^(client|customer|cust)_?name$/i, /^name$/i, /^c_?name$/i],
+          prioritylevel: [/^priority$/i, /^pref$/i, /^importance$/i, /^level$/i, /^priority_?level$/i],
+          requestedtaskids: [/^(requested|req)_?task/i, /^task_?ids?$/i, /^tasks$/i],
+          grouptag: [/^group$/i, /^tag$/i, /^category$/i, /^type$/i],
+          attributesjson: [/^attributes$/i, /^json$/i, /^metadata$/i, /^extra$/i],
+
+          workerid: [/^(worker|employee|emp|staff)_?id$/i, /^id$/i, /^w_?id$/i],
+          workername: [/^(worker|employee|emp|staff)_?name$/i, /^name$/i, /^w_?name$/i],
+          skills: [/^skills?$/i, /^capabilities$/i, /^expertise$/i, /^abilities$/i],
+          availableslots: [/^(available|avail)_?slots?$/i, /^slots?$/i, /^availability$/i, /^schedule$/i],
+          maxloadperphase: [/^max_?load$/i, /^capacity$/i, /^limit$/i, /^max_?per_?phase$/i],
+          workergroup: [/^(worker_?)?group$/i, /^team$/i, /^department$/i, /^unit$/i],
+          qualificationlevel: [/^(qualification|qual)_?level$/i, /^level$/i, /^grade$/i, /^rank$/i],
+
+          taskid: [/^(task|job|work)_?id$/i, /^id$/i, /^t_?id$/i],
+          taskname: [/^(task|job|work)_?name$/i, /^name$/i, /^title$/i, /^t_?name$/i],
+          category: [/^category$/i, /^type$/i, /^kind$/i, /^class$/i],
+          duration: [/^duration$/i, /^time$/i, /^length$/i, /^hours?$/i, /^days?$/i],
+          requiredskills: [/^(required|req)_?skills?$/i, /^skills?$/i, /^needs$/i, /^requirements$/i],
+          preferredphases: [/^(preferred|pref)_?phases?$/i, /^phases?$/i, /^schedule$/i, /^timing$/i],
+          maxconcurrent: [/^max_?concurrent$/i, /^concurrent$/i, /^parallel$/i, /^simultaneous$/i],
         }
 
-        const expectedVariations = variations[cleanExpected] || []
-        if (expectedVariations.includes(cleanHeader)) {
+        const expectedPatterns = patterns[cleanExpected] || []
+        const originalHeader = header.trim()
+
+        for (const pattern of expectedPatterns) {
+          if (pattern.test(originalHeader)) {
+            mappings[header] = expected
+            return
+          }
+        }
+
+        // Fuzzy matching for partial similarities
+        if (
+          cleanHeader.includes(cleanExpected.substring(0, 4)) ||
+          cleanExpected.includes(cleanHeader.substring(0, 4))
+        ) {
           mappings[header] = expected
         }
       })
     })
 
     return mappings
+  }
+
+  const getGeminiHeaderMappings = async (
+    headers: string[],
+    expectedCols: string[],
+    fileType: string,
+  ): Promise<{ [key: string]: string }> => {
+    try {
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiKey: geminiApiKey,
+          prompt: `You are an expert data analyst. Map the following CSV headers to the correct standardized column names.
+
+File Type: ${fileType}
+Current Headers: ${headers.join(", ")}
+Expected Standard Headers: ${expectedCols.join(", ")}
+
+Rules:
+- Map each current header to the most appropriate standard header
+- If a header doesn't match any standard header, don't include it in the mapping
+- Consider common abbreviations and variations (e.g., "pref" → "PriorityLevel", "id" → appropriate ID field)
+- Be case-sensitive in your output for standard headers
+
+Return ONLY a JSON object with the mappings:
+{"current_header": "StandardHeader", ...}
+
+Example: {"pref": "PriorityLevel", "name": "ClientName", "id": "ClientID"}`,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      if (result.success && result.text) {
+        // Extract JSON from Gemini response
+        let responseText = result.text
+        if (typeof responseText === "object" && responseText.text) {
+          responseText = responseText.text
+        }
+
+        // Remove markdown code blocks if present
+        responseText = responseText
+          .replace(/```json\n?/g, "")
+          .replace(/```\n?/g, "")
+          .trim()
+
+        try {
+          const mappings = JSON.parse(responseText)
+          console.log("Gemini header mappings:", mappings)
+          return mappings
+        } catch (parseError) {
+          console.error("Failed to parse Gemini response:", parseError)
+          return {}
+        }
+      }
+
+      return {}
+    } catch (error) {
+      console.error("Gemini header mapping error:", error)
+      return {}
+    }
   }
 
   const parseFile = async (file: File): Promise<any[]> => {
@@ -172,13 +281,12 @@ export function DataUpload({ onDataUploaded }: DataUploadProps) {
       // Update status to mapping
       setUploadedFiles((prev) => prev.map((f) => (f.name === fileName ? { ...f, status: "mapping", progress: 50 } : f)))
 
-      // AI column mapping
       const fileType = forceType || detectFileType(fileName)
       const headers = Object.keys(rawData[0] || {})
       const expectedCols = expectedColumns[fileType]
-      const aiMappings = aiColumnMapping(headers, expectedCols)
+      const aiMappings = await aiColumnMapping(headers, expectedCols, fileType)
 
-      // Apply mappings to data
+      // Apply mappings to data and fix headers
       const mappedData = rawData.map((row) => {
         const mappedRow: any = {}
         Object.entries(row).forEach(([key, value]) => {
@@ -296,12 +404,41 @@ export function DataUpload({ onDataUploaded }: DataUploadProps) {
             })}
           </div>
 
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Smart Header Examples</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div className="flex items-center gap-1">
+                <span className="text-gray-600">"pref"</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-blue-600">PriorityLevel</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-600">"id"</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-blue-600">ClientID</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-600">"name"</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-blue-600">ClientName</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-600">"skills"</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-blue-600">RequiredSkills</span>
+              </div>
+            </div>
+          </div>
+
           {missingTypes.length > 0 && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Still need: {missingTypes.map((type) => fileTypeInfo[type].title).join(", ")}. All functionality will be
-                available once all 3 file types are uploaded.
+                Still need: {missingTypes.map((type) => fileTypeInfo[type].title).join(", ")}. Headers will be
+                automatically mapped for all file types.
               </AlertDescription>
             </Alert>
           )}
@@ -358,11 +495,12 @@ export function DataUpload({ onDataUploaded }: DataUploadProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="w-5 h-5" />
-              AI Processing Status
+              AI Header Mapping Status {/* Updated title */}
             </CardTitle>
             <CardDescription>
-              AI is analyzing your files and intelligently mapping columns. Context from all files will be shared across
-              all features.
+              {geminiApiKey
+                ? "Gemini AI is analyzing headers and mapping them to standard format."
+                : "Local AI is analyzing headers and mapping them to standard format."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -397,17 +535,22 @@ export function DataUpload({ onDataUploaded }: DataUploadProps) {
                   {file.status === "error" && "Error processing file"}
                 </div>
 
-                {/* AI Mappings Display */}
+                {/* Enhanced AI Mappings Display */}
                 {file.aiMappings && Object.keys(file.aiMappings).length > 0 && (
                   <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <Brain className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-800">AI Column Mappings</span>
+                      <span className="text-sm font-medium text-blue-800">
+                        {geminiApiKey ? "Gemini AI" : "Local AI"} Header Mappings
+                      </span>
+                      <Badge variant="secondary" className="text-xs">
+                        {Object.keys(file.aiMappings).length} mapped
+                      </Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                       {Object.entries(file.aiMappings).map(([original, mapped]) => (
-                        <div key={original} className="flex items-center gap-2">
-                          <span className="text-gray-600">{original}</span>
+                        <div key={original} className="flex items-center gap-2 p-2 bg-white rounded border">
+                          <span className="text-gray-600 font-mono">{original}</span>
                           <span className="text-gray-400">→</span>
                           <span className="text-blue-600 font-medium">{mapped}</span>
                         </div>

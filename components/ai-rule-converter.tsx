@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Brain, Sparkles, CheckCircle, AlertCircle, Lightbulb, ArrowRight } from "lucide-react"
+import { Brain, Sparkles, CheckCircle, AlertCircle, Lightbulb, ArrowRight, Zap } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 
 interface ParsedRule {
@@ -17,6 +17,7 @@ interface ParsedRule {
   confidence: number
   suggestions?: string[]
   warnings?: string[]
+  aiEnhanced?: boolean
 }
 
 interface AIRuleConverterProps {
@@ -26,15 +27,17 @@ interface AIRuleConverterProps {
     tasks: any[]
   }
   onRuleCreated: (rule: ParsedRule) => void
+  geminiApiKey?: string
 }
 
-export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps) {
+export function AIRuleConverter({ dataSet, onRuleCreated, geminiApiKey }: AIRuleConverterProps) {
   const [naturalLanguageInput, setNaturalLanguageInput] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingStep, setProcessingStep] = useState("")
   const [progress, setProgress] = useState(0)
   const [parsedRule, setParsedRule] = useState<ParsedRule | null>(null)
   const [showExamples, setShowExamples] = useState(false)
+  const [useGemini, setUseGemini] = useState(false)
 
   // Extract data context for AI processing
   const taskIds = dataSet.tasks.map((task) => task.TaskID).filter(Boolean)
@@ -80,6 +83,99 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
       explanation: "Defines rule hierarchy and precedence",
     },
   ]
+
+  const callGeminiAPI = async (input: string): Promise<ParsedRule | null> => {
+    if (!geminiApiKey) throw new Error("Gemini API key not configured")
+
+    const dataContext = {
+      taskIds: taskIds.slice(0, 20),
+      clientGroups,
+      workerGroups,
+      skills: skills.slice(0, 20),
+      sampleTasks: dataSet.tasks.slice(0, 5),
+      sampleClients: dataSet.clients.slice(0, 3),
+      sampleWorkers: dataSet.workers.slice(0, 3),
+    }
+
+    const prompt = `
+You are an AI assistant specialized in converting natural language business rules into structured resource allocation configurations.
+
+Available Data Context:
+- Task IDs: ${taskIds.join(", ")}
+- Client Groups: ${clientGroups.join(", ")}
+- Worker Groups: ${workerGroups.join(", ")}
+- Available Skills: ${skills.join(", ")}
+
+Sample Data:
+${JSON.stringify(dataContext, null, 2)}
+
+User's Natural Language Rule: "${input}"
+
+Please analyze this rule and return a JSON response with the following structure:
+{
+  "type": "coRun|slotRestriction|loadLimit|phaseWindow|patternMatch|precedenceOverride",
+  "name": "Generated rule name",
+  "description": "User's original input",
+  "parameters": {
+    // Rule-specific parameters based on type
+  },
+  "confidence": 0.0-1.0,
+  "suggestions": ["Optional array of suggestions"],
+  "warnings": ["Optional array of warnings"],
+  "aiEnhanced": true
+}
+
+Rule Types and Parameters:
+1. coRun: { tasks: ["T001", "T002"] }
+2. slotRestriction: { groupType: "client|worker", groupName: "GroupName", minCommonSlots: number }
+3. loadLimit: { workerGroup: "GroupName", maxSlotsPerPhase: number }
+4. phaseWindow: { taskId: "T001", allowedPhases: "1,2,3" }
+5. patternMatch: { pattern: "regex", field: "TaskID|TaskName", action: "prioritize|exclude|include|flag" }
+6. precedenceOverride: { overrideType: "global|specific|priority|client|worker" }
+
+Focus on:
+- Extracting the correct rule type
+- Identifying valid entities from the available data
+- Providing high confidence scores for clear rules
+- Adding warnings for ambiguous or invalid references
+- Suggesting improvements or alternatives
+`
+
+    const response = await fetch("/api/gemini", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        apiKey: geminiApiKey,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    const responseText = data.response
+
+    // Parse JSON from Gemini response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      try {
+        const parsedResponse = JSON.parse(jsonMatch[0])
+        return {
+          ...parsedResponse,
+          aiEnhanced: true,
+        }
+      } catch (error) {
+        console.error("Failed to parse Gemini JSON response:", error)
+        return null
+      }
+    }
+
+    return null
+  }
 
   const parseNaturalLanguageRule = async (input: string): Promise<ParsedRule | null> => {
     const lowercaseInput = input.toLowerCase()
@@ -409,6 +505,7 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
       confidence: Math.max(0, Math.min(1, confidence)),
       suggestions: suggestions.length > 0 ? suggestions : undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
+      aiEnhanced: false,
     }
   }
 
@@ -464,7 +561,22 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
     setParsedRule(null)
 
     try {
-      const parsed = await parseNaturalLanguageRule(naturalLanguageInput)
+      let parsed: ParsedRule | null = null
+
+      if (useGemini && geminiApiKey) {
+        try {
+          setProcessingStep("Connecting to Gemini AI...")
+          setProgress(10)
+          parsed = await callGeminiAPI(naturalLanguageInput)
+        } catch (error) {
+          console.error("Gemini API error:", error)
+          // Fallback to local parsing
+          parsed = await parseNaturalLanguageRule(naturalLanguageInput)
+        }
+      } else {
+        parsed = await parseNaturalLanguageRule(naturalLanguageInput)
+      }
+
       setParsedRule(parsed)
     } catch (error) {
       console.error("Error parsing rule:", error)
@@ -494,9 +606,21 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
         <CardTitle className="flex items-center gap-2">
           <Brain className="w-5 h-5" />
           AI Rule Converter
+          {geminiApiKey && (
+            <Button
+              variant={useGemini ? "default" : "outline"}
+              size="sm"
+              onClick={() => setUseGemini(!useGemini)}
+              className="ml-auto"
+            >
+              <Zap className="w-3 h-3 mr-1" />
+              {useGemini ? "Gemini ON" : "Gemini OFF"}
+            </Button>
+          )}
         </CardTitle>
         <CardDescription>
-          Describe your business rule in plain English, and AI will convert it to a structured configuration
+          Describe your business rule in plain English, and AI will convert it to a structured configuration.{" "}
+          {geminiApiKey && useGemini && "Enhanced with Gemini AI for better understanding."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -519,8 +643,14 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
 
           <div className="flex gap-2">
             <Button onClick={handleProcessRule} disabled={!naturalLanguageInput.trim() || isProcessing}>
-              {isProcessing ? <Sparkles className="w-4 h-4 mr-2 animate-pulse" /> : <Brain className="w-4 h-4 mr-2" />}
-              {isProcessing ? "Processing..." : "Convert to Rule"}
+              {isProcessing ? (
+                <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
+              ) : useGemini && geminiApiKey ? (
+                <Zap className="w-4 h-4 mr-2" />
+              ) : (
+                <Brain className="w-4 h-4 mr-2" />
+              )}
+              {isProcessing ? "Processing..." : useGemini && geminiApiKey ? "AI Convert" : "Convert to Rule"}
             </Button>
             {naturalLanguageInput && (
               <Button variant="outline" onClick={() => setNaturalLanguageInput("")}>
@@ -535,7 +665,11 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />
             <p className="text-sm text-gray-600 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 animate-pulse" />
+              {useGemini && geminiApiKey ? (
+                <Zap className="w-4 h-4 animate-pulse text-purple-500" />
+              ) : (
+                <Sparkles className="w-4 h-4 animate-pulse" />
+              )}
               {processingStep}
             </p>
           </div>
@@ -575,6 +709,12 @@ export function AIRuleConverter({ dataSet, onRuleCreated }: AIRuleConverterProps
               <CardTitle className="text-sm flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-green-600" />
                 AI Parsed Rule
+                {parsedRule.aiEnhanced && (
+                  <Badge variant="secondary" className="text-xs">
+                    <Zap className="w-3 h-3 mr-1" />
+                    Gemini Enhanced
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">

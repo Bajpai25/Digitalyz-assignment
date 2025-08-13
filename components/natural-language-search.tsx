@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Brain, Search, Sparkles, X, Filter } from "lucide-react"
+import { Brain, Search, Sparkles, X, Filter, Zap } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 
 interface SearchQuery {
@@ -13,6 +13,7 @@ interface SearchQuery {
   query: string
   parsedConditions: ParsedCondition[]
   resultCount: number
+  aiEnhanced?: boolean
 }
 
 interface ParsedCondition {
@@ -30,14 +31,21 @@ interface NaturalLanguageSearchProps {
   }
   onSearchResults: (results: any[], query: string, conditions: ParsedCondition[]) => void
   activeDataType: "clients" | "workers" | "tasks"
+  geminiApiKey?: string
 }
 
-export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType }: NaturalLanguageSearchProps) {
+export function NaturalLanguageSearch({
+  dataSet,
+  onSearchResults,
+  activeDataType,
+  geminiApiKey,
+}: NaturalLanguageSearchProps) {
   const [query, setQuery] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [searchHistory, setSearchHistory] = useState<SearchQuery[]>([])
   const [parsedQuery, setParsedQuery] = useState<ParsedCondition[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [useGemini, setUseGemini] = useState(false)
 
   // Sample queries for different data types
   const sampleQueries = {
@@ -254,6 +262,50 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
     return conditions
   }
 
+  const callGeminiAPI = async (query: string, dataContext: any[]) => {
+    if (!geminiApiKey) throw new Error("Gemini API key not configured")
+
+    const dataSchema = dataContext.length > 0 ? Object.keys(dataContext[0]) : []
+    const sampleData = dataContext.slice(0, 3)
+
+    const prompt = `
+You are an AI assistant helping users search through ${activeDataType} data. 
+
+Data Schema: ${dataSchema.join(", ")}
+Sample Data: ${JSON.stringify(sampleData, null, 2)}
+
+User Query: "${query}"
+
+Please analyze this query and return a JSON response with:
+1. "conditions": Array of search conditions with fields: field, operator, value, type
+2. "explanation": Brief explanation of what you understood
+3. "suggestions": Array of alternative queries the user might want to try
+
+Available operators: >, <, =, contains, in, not
+Available types: numeric, string, array, boolean
+
+Focus on understanding the user's intent and mapping it to the available data fields.
+`
+
+    const response = await fetch("/api/gemini", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        apiKey: geminiApiKey,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    return data.response
+  }
+
   const executeSearch = (conditions: ParsedCondition[]) => {
     const currentData = dataSet[activeDataType] || []
 
@@ -339,25 +391,96 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
 
     setIsProcessing(true)
 
-    // Simulate AI processing delay
-    await new Promise((resolve) => setTimeout(resolve, 800))
+    try {
+      let conditions: ParsedCondition[] = []
+      let aiEnhanced = false
 
-    const conditions = parseNaturalLanguage(query)
-    setParsedQuery(conditions)
+      if (useGemini && geminiApiKey) {
+        try {
+          const geminiResponse = await callGeminiAPI(query, dataSet[activeDataType])
 
-    const results = executeSearch(conditions)
+          let parsedResponse
 
-    // Add to search history
-    const searchQuery: SearchQuery = {
-      id: Date.now().toString(),
-      query,
-      parsedConditions: conditions,
-      resultCount: results.length,
+          if (geminiResponse && typeof geminiResponse === "object") {
+            // Handle the response structure: { text: "\`\`\`json\n{...}\n\`\`\`", type: "text", success: true }
+            const responseText = geminiResponse.text || geminiResponse.response || geminiResponse
+
+            if (typeof responseText === "string") {
+              // Extract JSON from markdown code blocks if present
+              const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/\{[\s\S]*\}/)
+              if (jsonMatch) {
+                try {
+                  parsedResponse = JSON.parse(jsonMatch[1] || jsonMatch[0])
+                } catch (parseError) {
+                  console.error("JSON parsing error:", parseError)
+                  parsedResponse = null
+                }
+              }
+            } else if (typeof responseText === "object") {
+              parsedResponse = responseText
+            }
+          } else if (typeof geminiResponse === "string") {
+            // Handle direct string response
+            const jsonMatch = geminiResponse.match(/```json\s*([\s\S]*?)\s*```/) || geminiResponse.match(/\{[\s\S]*\}/)
+            if (jsonMatch) {
+              try {
+                parsedResponse = JSON.parse(jsonMatch[1] || jsonMatch[0])
+              } catch (parseError) {
+                console.error("JSON parsing error:", parseError)
+                parsedResponse = null
+              }
+            }
+          }
+
+          if (parsedResponse && parsedResponse.conditions) {
+            conditions = parsedResponse.conditions.map((condition: any) => ({
+              field: condition.field,
+              operator: condition.operator,
+              value: condition.value,
+              type: condition.type as "numeric" | "string" | "array" | "boolean",
+            }))
+            aiEnhanced = true
+
+            if (parsedResponse.explanation) {
+              console.log("Gemini explanation:", parsedResponse.explanation)
+            }
+            if (parsedResponse.suggestions) {
+              console.log("Gemini suggestions:", parsedResponse.suggestions)
+            }
+          } else {
+            // Fallback to local parsing
+            conditions = parseNaturalLanguage(query)
+          }
+        } catch (error) {
+          console.error("Gemini API error:", error)
+          // Fallback to local parsing
+          conditions = parseNaturalLanguage(query)
+        }
+      } else {
+        // Use local parsing
+        await new Promise((resolve) => setTimeout(resolve, 800))
+        conditions = parseNaturalLanguage(query)
+      }
+
+      setParsedQuery(conditions)
+      const results = executeSearch(conditions)
+
+      // Add to search history
+      const searchQuery: SearchQuery = {
+        id: Date.now().toString(),
+        query,
+        parsedConditions: conditions,
+        resultCount: results.length,
+        aiEnhanced,
+      }
+
+      setSearchHistory((prev) => [searchQuery, ...prev.slice(0, 4)])
+      onSearchResults(results, query, conditions)
+    } catch (error) {
+      console.error("Search error:", error)
+    } finally {
+      setIsProcessing(false)
     }
-
-    setSearchHistory((prev) => [searchQuery, ...prev.slice(0, 4)])
-    onSearchResults(results, query, conditions)
-    setIsProcessing(false)
   }
 
   const handleSampleQuery = (sampleQuery: string) => {
@@ -376,10 +499,21 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
         <CardTitle className="flex items-center gap-2">
           <Brain className="w-5 h-5" />
           Natural Language Search
+          {geminiApiKey && (
+            <Button
+              variant={useGemini ? "default" : "outline"}
+              size="sm"
+              onClick={() => setUseGemini(!useGemini)}
+              className="ml-auto"
+            >
+              <Zap className="w-3 h-3 mr-1" />
+              {useGemini ? "Gemini ON" : "Gemini OFF"}
+            </Button>
+          )}
         </CardTitle>
         <CardDescription>
-          Search your data using plain English. Try queries like "workers with Python skills" or "tasks with duration
-          more than 2"
+          Search your data using plain English.{" "}
+          {geminiApiKey && useGemini && "Enhanced with Gemini AI for better understanding."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -406,8 +540,14 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
               )}
             </div>
             <Button onClick={handleSearch} disabled={!query.trim() || isProcessing} className="self-end">
-              {isProcessing ? <Sparkles className="w-4 h-4 mr-2 animate-pulse" /> : <Search className="w-4 h-4 mr-2" />}
-              {isProcessing ? "Processing..." : "Search"}
+              {isProcessing ? (
+                <Sparkles className="w-4 h-4 mr-2 animate-pulse" />
+              ) : useGemini && geminiApiKey ? (
+                <Zap className="w-4 h-4 mr-2" />
+              ) : (
+                <Search className="w-4 h-4 mr-2" />
+              )}
+              {isProcessing ? "Processing..." : useGemini && geminiApiKey ? "AI Search" : "Search"}
             </Button>
           </div>
 
@@ -441,7 +581,15 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
             <Brain className="h-4 w-4" />
             <AlertDescription>
               <div className="space-y-2">
-                <p className="font-medium">AI understood your query as:</p>
+                <p className="font-medium flex items-center gap-2">
+                  {useGemini && geminiApiKey ? "Gemini AI" : "AI"} understood your query as:
+                  {useGemini && geminiApiKey && (
+                    <Badge variant="secondary" className="text-xs">
+                      <Zap className="w-3 h-3 mr-1" />
+                      Enhanced
+                    </Badge>
+                  )}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {parsedQuery.map((condition, index) => (
                     <Badge key={index} variant="secondary" className="text-xs">
@@ -495,7 +643,10 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
                   className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100"
                   onClick={() => setQuery(search.query)}
                 >
-                  <span className="truncate flex-1">{search.query}</span>
+                  <span className="truncate flex-1 flex items-center gap-2">
+                    {search.query}
+                    {search.aiEnhanced && <Zap className="w-3 h-3 text-purple-500" />}
+                  </span>
                   <Badge variant="outline" className="ml-2">
                     {search.resultCount} results
                   </Badge>

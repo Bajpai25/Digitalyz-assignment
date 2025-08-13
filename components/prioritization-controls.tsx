@@ -14,6 +14,7 @@ interface PrioritizationControlsProps {
     workers: any[]
     tasks: any[]
   }
+   geminiApiKey: string
 }
 
 interface PriorityWeights {

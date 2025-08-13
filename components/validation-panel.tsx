@@ -25,6 +25,7 @@ interface ValidationPanelProps {
     tasks: any[]
   }
   validationResults: ValidationResult[]
+  geminiApiKey: string
   onValidationChange: (results: ValidationResult[]) => void
 }
 

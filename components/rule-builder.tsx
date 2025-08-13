@@ -20,6 +20,7 @@ interface RuleBuilderProps {
     workers: any[]
     tasks: any[]
   }
+   geminiApiKey: string
 }
 
 export function RuleBuilder({ dataSet }: RuleBuilderProps) {

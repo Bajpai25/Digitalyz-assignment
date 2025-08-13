@@ -18,6 +18,7 @@ interface DataGridProps {
     tasks: any[]
   }
   onDataChange: (dataSet: any) => void
+  geminiApiKey: string
 }
 
 interface ParsedCondition {
@@ -27,7 +28,7 @@ interface ParsedCondition {
   type: "numeric" | "string" | "array" | "boolean"
 }
 
-export function DataGrid({ dataSet, onDataChange }: DataGridProps) {
+export function DataGrid({ dataSet, onDataChange, geminiApiKey }: DataGridProps) {
   const [activeDataType, setActiveDataType] = useState<"clients" | "workers" | "tasks">("clients")
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   const [editValue, setEditValue] = useState("")
@@ -167,6 +168,7 @@ export function DataGrid({ dataSet, onDataChange }: DataGridProps) {
         dataSet={dataSet}
         onSearchResults={handleNaturalLanguageResults}
         activeDataType={activeDataType}
+        geminiApiKey={geminiApiKey}
       />
 
       {/* Data Grid */}
@@ -191,7 +193,7 @@ export function DataGrid({ dataSet, onDataChange }: DataGridProps) {
         <CardContent>
           <Tabs
             value={activeDataType}
-            onValueChange={(value: any) => {
+            onValueChange={(value) => {
               setActiveDataType(value as any)
               clearAllFilters() // Clear filters when switching tabs
             }}
