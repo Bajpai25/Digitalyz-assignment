@@ -65,72 +65,110 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
     const conditions: ParsedCondition[] = []
     const lowercaseQuery = query.toLowerCase()
 
-    // Field mappings for natural language
+    // Enhanced field mappings with AI-powered synonyms
     const fieldMappings: { [key: string]: { [key: string]: string } } = {
       clients: {
         "priority level": "PriorityLevel",
         priority: "PriorityLevel",
+        importance: "PriorityLevel",
         "client name": "ClientName",
         name: "ClientName",
+        company: "ClientName",
+        organization: "ClientName",
         group: "GroupTag",
         "group tag": "GroupTag",
+        category: "GroupTag",
         "requested tasks": "RequestedTaskIDs",
         tasks: "RequestedTaskIDs",
+        requirements: "RequestedTaskIDs",
         budget: "AttributesJSON.budget",
+        cost: "AttributesJSON.budget",
+        spending: "AttributesJSON.budget",
       },
       workers: {
         skills: "Skills",
         skill: "Skills",
+        expertise: "Skills",
+        capabilities: "Skills",
+        competencies: "Skills",
         "available slots": "AvailableSlots",
         slots: "AvailableSlots",
+        availability: "AvailableSlots",
         phases: "AvailableSlots",
         "max load": "MaxLoadPerPhase",
         load: "MaxLoadPerPhase",
+        capacity: "MaxLoadPerPhase",
         "worker group": "WorkerGroup",
         group: "WorkerGroup",
+        team: "WorkerGroup",
+        department: "WorkerGroup",
         qualification: "QualificationLevel",
         level: "QualificationLevel",
+        experience: "QualificationLevel",
+        seniority: "QualificationLevel",
         name: "WorkerName",
       },
       tasks: {
         duration: "Duration",
+        length: "Duration",
+        time: "Duration",
         "required skills": "RequiredSkills",
         skills: "RequiredSkills",
+        requirements: "RequiredSkills",
+        needs: "RequiredSkills",
         "preferred phases": "PreferredPhases",
         phases: "PreferredPhases",
+        timing: "PreferredPhases",
+        schedule: "PreferredPhases",
         "max concurrent": "MaxConcurrent",
         concurrent: "MaxConcurrent",
+        parallel: "MaxConcurrent",
+        simultaneous: "MaxConcurrent",
         category: "Category",
+        type: "Category",
+        kind: "Category",
         name: "TaskName",
+        title: "TaskName",
       },
     }
 
-    // Operator mappings
+    // Enhanced operator mappings with natural language variations
     const operatorMappings: { [key: string]: string } = {
       "greater than": ">",
       "more than": ">",
+      "higher than": ">",
       above: ">",
       over: ">",
+      exceeds: ">",
       "less than": "<",
+      "fewer than": "<",
+      "lower than": "<",
       below: "<",
       under: "<",
       "equal to": "=",
       equals: "=",
       is: "=",
+      matches: "=",
       contains: "contains",
       includes: "contains",
       has: "contains",
       with: "contains",
+      featuring: "contains",
       in: "in",
+      within: "in",
+      among: "in",
       not: "not",
+      excluding: "not",
+      without: "not",
     }
 
-    // Parse numeric conditions
+    // Enhanced numeric patterns with better context awareness
     const numericPatterns = [
-      /(\w+(?:\s+\w+)*)\s+(greater than|more than|above|over)\s+(\d+)/g,
-      /(\w+(?:\s+\w+)*)\s+(less than|below|under)\s+(\d+)/g,
-      /(\w+(?:\s+\w+)*)\s+(equal to|equals|is)\s+(\d+)/g,
-      /(\w+(?:\s+\w+)*)\s+(\d+)/g, // Simple numeric match
+      /(\w+(?:\s+\w+)*)\s+(greater than|more than|higher than|above|over|exceeds)\s+(\d+(?:\.\d+)?)/g,
+      /(\w+(?:\s+\w+)*)\s+(less than|fewer than|lower than|below|under)\s+(\d+(?:\.\d+)?)/g,
+      /(\w+(?:\s+\w+)*)\s+(equal to|equals|is|matches)\s+(\d+(?:\.\d+)?)/g,
+      /(\w+(?:\s+\w+)*)\s+of\s+(\d+(?:\.\d+)?)/g, // "priority of 4"
+      /(\w+(?:\s+\w+)*)\s+(\d+(?:\.\d+)?)\s+or\s+(more|higher|greater)/g, // "priority 3 or higher"
     ]
 
     numericPatterns.forEach((pattern) => {
@@ -138,10 +176,10 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
       while ((match = pattern.exec(lowercaseQuery)) !== null) {
         const fieldName = match[1].trim()
         const operator = match[2] ? operatorMappings[match[2]] || "=" : "="
-        const value = Number.parseInt(match[3] || match[2])
+        const value = Number.parseFloat(match[3] || match[2])
 
         const mappedField = fieldMappings[activeDataType]?.[fieldName]
-        if (mappedField) {
+        if (mappedField && !isNaN(value)) {
           conditions.push({
             field: mappedField,
             operator,
@@ -152,10 +190,12 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
       }
     })
 
-    // Parse string/array conditions
+    // Enhanced string/array patterns with better context understanding
     const stringPatterns = [
-      /(\w+(?:\s+\w+)*)\s+(contains|includes|has|with)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
-      /(\w+(?:\s+\w+)*)\s+(requesting|requiring)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
+      /(\w+(?:\s+\w+)*)\s+(contains|includes|has|with|featuring)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
+      /(\w+(?:\s+\w+)*)\s+(requiring|needing|requesting)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
+      /(\w+(?:\s+\w+)*)\s+(skilled in|capable of|experienced in)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
+      /(\w+(?:\s+\w+)*)\s+(named|called|titled)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
     ]
 
     stringPatterns.forEach((pattern) => {
@@ -163,7 +203,7 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
       while ((match = pattern.exec(lowercaseQuery)) !== null) {
         const fieldName = match[1].trim()
         const operator = "contains"
-        const value = match[3].trim()
+        const value = match[3].trim().replace(/['"]/g, "")
 
         const mappedField = fieldMappings[activeDataType]?.[fieldName]
         if (mappedField) {
@@ -177,23 +217,28 @@ export function NaturalLanguageSearch({ dataSet, onSearchResults, activeDataType
       }
     })
 
-    // Parse list/array conditions (e.g., "in phases 1, 2, and 3")
-    const arrayPatterns = [/in\s+(\w+(?:\s+\w+)*)\s+([\d,\s]+)/g, /(\w+(?:\s+\w+)*)\s+([\d,\s]+(?:\s+and\s+\d+)?)/g]
+    // Enhanced array patterns with better phase and list handling
+    const arrayPatterns = [
+      /(?:in|during|within)\s+(\w+(?:\s+\w+)*)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/g,
+      /(\w+(?:\s+\w+)*)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/g,
+      /(?:phases?|slots?)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/g,
+    ]
 
     arrayPatterns.forEach((pattern) => {
       let match
       while ((match = pattern.exec(lowercaseQuery)) !== null) {
-        const fieldName = match[1]?.trim()
-        const valueString = match[2].trim()
+        const fieldName = match[1]?.trim() || "phases"
+        const valueString = match[2] || match[1]
         const values = valueString
-          .replace(/and/g, ",")
+          .replace(/(?:and|or)/g, ",")
           .split(",")
           .map((v) => v.trim())
           .filter((v) => v && !isNaN(Number(v)))
           .map(Number)
 
-        if (fieldName && values.length > 0) {
-          const mappedField = fieldMappings[activeDataType]?.[fieldName]
+        if (values.length > 0) {
+          const mappedField =
+            fieldMappings[activeDataType]?.[fieldName] || (fieldName === "phases" ? "PreferredPhases" : null)
           if (mappedField) {
             conditions.push({
               field: mappedField,

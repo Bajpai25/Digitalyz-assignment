@@ -191,7 +191,7 @@ export function DataGrid({ dataSet, onDataChange }: DataGridProps) {
         <CardContent>
           <Tabs
             value={activeDataType}
-            onValueChange={(value) => {
+            onValueChange={(value: any) => {
               setActiveDataType(value as any)
               clearAllFilters() // Clear filters when switching tabs
             }}

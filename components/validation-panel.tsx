@@ -327,7 +327,7 @@ export function ValidationPanel({ dataSet, validationResults, onValidationChange
     dataSet.tasks.forEach((task) => {
       if (task.RequiredSkills) {
         const skills = task.RequiredSkills.split(",").map((s: string) => s.trim())
-        skills.forEach((skill) => allRequiredSkills.add(skill))
+        skills.forEach((skill: string) => allRequiredSkills.add(skill))
       }
     })
 
@@ -336,7 +336,7 @@ export function ValidationPanel({ dataSet, validationResults, onValidationChange
     dataSet.workers.forEach((worker) => {
       if (worker.Skills) {
         const skills = worker.Skills.split(",").map((s: string) => s.trim())
-        skills.forEach((skill) => allAvailableSkills.add(skill))
+        skills.forEach((skill: string) => allAvailableSkills.add(skill))
       }
     })
 
@@ -427,57 +427,91 @@ export function ValidationPanel({ dataSet, validationResults, onValidationChange
 
   // 10. AI-Powered Insights
   const generateAiInsights = (results: ValidationResult[]) => {
-    // Analyze workload distribution
+    // Advanced workload distribution analysis
     if (dataSet.workers.length > 0 && dataSet.tasks.length > 0) {
       const avgTasksPerWorker = dataSet.tasks.length / dataSet.workers.length
+      const workloadVariance = calculateWorkloadVariance(dataSet)
+
       if (avgTasksPerWorker > 5) {
         results.push({
           type: "warning",
           category: "AI Insights",
           message: `High task-to-worker ratio detected (${avgTasksPerWorker.toFixed(1)} tasks per worker)`,
-          suggestion: "Consider adding more workers or reducing task scope",
+          suggestion: "Consider adding more workers or reducing task scope to improve allocation efficiency",
+          severity: "medium",
+        })
+      }
+
+      if (workloadVariance > 0.3) {
+        results.push({
+          type: "warning",
+          category: "AI Insights",
+          message: `Uneven workload distribution detected (variance: ${(workloadVariance * 100).toFixed(1)}%)`,
+          suggestion: "Review worker capacities and task assignments for better load balancing",
           severity: "medium",
         })
       }
     }
 
-    // Analyze skill distribution
-    const skillFrequency: { [skill: string]: number } = {}
-    dataSet.tasks.forEach((task) => {
-      if (task.RequiredSkills) {
-        const skills = task.RequiredSkills.split(",").map((s: string) => s.trim())
-        skills.forEach((skill) => {
-          skillFrequency[skill] = (skillFrequency[skill] || 0) + 1
-        })
-      }
-    })
+    // Enhanced skill distribution analysis with demand forecasting
+    const skillAnalysis = analyzeSkillDemandAndSupply(dataSet)
 
-    const mostDemandedSkill = Object.entries(skillFrequency).sort(([, a], [, b]) => b - a)[0]
-    if (mostDemandedSkill && mostDemandedSkill[1] > dataSet.tasks.length * 0.5) {
+    if (skillAnalysis.criticalSkills.length > 0) {
       results.push({
         type: "warning",
         category: "AI Insights",
-        message: `Skill '${mostDemandedSkill[0]}' is required by ${mostDemandedSkill[1]} tasks (${((mostDemandedSkill[1] / dataSet.tasks.length) * 100).toFixed(0)}%)`,
-        suggestion: "Ensure adequate workers with this critical skill are available",
+        message: `Critical skills with high demand: ${skillAnalysis.criticalSkills.join(", ")}`,
+        suggestion: "Consider cross-training workers or hiring specialists for these high-demand skills",
+        severity: "high",
+      })
+    }
+
+    if (skillAnalysis.underutilizedSkills.length > 0) {
+      results.push({
+        type: "warning",
+        category: "AI Insights",
+        message: `Underutilized skills detected: ${skillAnalysis.underutilizedSkills.join(", ")}`,
+        suggestion: "Consider reassigning workers or finding additional tasks that utilize these skills",
+        severity: "low",
+      })
+    }
+
+    // Advanced priority distribution analysis with optimization suggestions
+    const priorityAnalysis = analyzePriorityDistribution(dataSet)
+
+    if (priorityAnalysis.imbalance > 0.7) {
+      results.push({
+        type: "warning",
+        category: "AI Insights",
+        message: `Priority distribution imbalance detected (${(priorityAnalysis.imbalance * 100).toFixed(0)}% high priority)`,
+        suggestion: "Review priority assignments to ensure realistic resource allocation expectations",
         severity: "medium",
       })
     }
 
-    // Priority distribution analysis
-    const priorityDistribution: { [priority: number]: number } = {}
-    dataSet.clients.forEach((client) => {
-      const priority = Number.parseInt(client.PriorityLevel) || 0
-      priorityDistribution[priority] = (priorityDistribution[priority] || 0) + 1
-    })
+    // Phase capacity optimization insights
+    const phaseAnalysis = analyzePhaseOptimization(dataSet)
 
-    const highPriorityClients = (priorityDistribution[4] || 0) + (priorityDistribution[5] || 0)
-    if (highPriorityClients > dataSet.clients.length * 0.7) {
+    if (phaseAnalysis.bottlenecks.length > 0) {
       results.push({
         type: "warning",
         category: "AI Insights",
-        message: `${highPriorityClients} clients (${((highPriorityClients / dataSet.clients.length) * 100).toFixed(0)}%) have high priority (4-5)`,
-        suggestion: "Consider reviewing priority assignments to ensure proper resource allocation",
-        severity: "low",
+        message: `Phase bottlenecks identified in phases: ${phaseAnalysis.bottlenecks.join(", ")}`,
+        suggestion: "Consider redistributing tasks or extending timelines for bottleneck phases",
+        severity: "high",
+      })
+    }
+
+    // Resource utilization efficiency analysis
+    const utilizationAnalysis = analyzeResourceUtilization(dataSet)
+
+    if (utilizationAnalysis.efficiency < 0.7) {
+      results.push({
+        type: "warning",
+        category: "AI Insights",
+        message: `Low resource utilization efficiency detected (${(utilizationAnalysis.efficiency * 100).toFixed(0)}%)`,
+        suggestion: "Optimize task assignments and worker schedules to improve resource utilization",
+        severity: "medium",
       })
     }
   }
@@ -674,4 +708,136 @@ function EmptyValidationState() {
       <p className="text-sm">Upload data to see comprehensive validation results</p>
     </div>
   )
+}
+
+// Helper functions for advanced AI analysis
+const parseArrayField = (field: any): any[] => {
+  if (!field) return []
+  if (Array.isArray(field)) return field
+  if (typeof field === "string") {
+    try {
+      // Try parsing as JSON array
+      if (field.startsWith("[") && field.endsWith("]")) {
+        return JSON.parse(field)
+      }
+      // Try parsing as comma-separated values
+      return field.split(",").map((item) => item.trim())
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+const calculateWorkloadVariance = (dataSet: any): number => {
+  const workerLoads = dataSet.workers.map((worker: { AvailableSlots: any; MaxLoadPerPhase: string }) => {
+    const availableSlots = parseArrayField(worker.AvailableSlots)
+    const maxLoad = Number.parseInt(worker.MaxLoadPerPhase) || 0
+    return availableSlots.length * maxLoad
+  })
+
+  const mean = workerLoads.reduce((sum: any, load: any) => sum + load, 0) / workerLoads.length
+  const variance = workerLoads.reduce((sum: number, load: number) => sum + Math.pow(load - mean, 2), 0) / workerLoads.length
+  return Math.sqrt(variance) / mean // Coefficient of variation
+}
+
+const analyzeSkillDemandAndSupply = (dataSet: any) => {
+  const skillDemand: { [skill: string]: number } = {}
+  const skillSupply: { [skill: string]: number } = {}
+
+  // Calculate demand from tasks
+  dataSet.tasks.forEach((task: { RequiredSkills: string }) => {
+    if (task.RequiredSkills) {
+      const skills = task.RequiredSkills.split(",").map((s: string) => s.trim())
+      skills.forEach((skill: string | number) => {
+        skillDemand[skill] = (skillDemand[skill] || 0) + 1
+      })
+    }
+  })
+
+  // Calculate supply from workers
+  dataSet.workers.forEach((worker: { Skills: string }) => {
+    if (worker.Skills) {
+      const skills = worker.Skills.split(",").map((s: string) => s.trim())
+      skills.forEach((skill: string | number) => {
+        skillSupply[skill] = (skillSupply[skill] || 0) + 1
+      })
+    }
+  })
+
+  const criticalSkills = Object.keys(skillDemand).filter((skill) => skillDemand[skill] / (skillSupply[skill] || 1) > 2)
+
+  const underutilizedSkills = Object.keys(skillSupply).filter(
+    (skill) => !skillDemand[skill] || skillSupply[skill] / (skillDemand[skill] || 1) > 3,
+  )
+
+  return { criticalSkills, underutilizedSkills }
+}
+
+const analyzePriorityDistribution = (dataSet: any) => {
+  const priorityCount: { [priority: number]: number } = {}
+
+  dataSet.clients.forEach((client: { PriorityLevel: string }) => {
+    const priority = Number.parseInt(client.PriorityLevel) || 0
+    priorityCount[priority] = (priorityCount[priority] || 0) + 1
+  })
+
+  const highPriorityCount = (priorityCount[4] || 0) + (priorityCount[5] || 0)
+  const totalClients = dataSet.clients.length
+  const imbalance = totalClients > 0 ? highPriorityCount / totalClients : 0
+
+  return { imbalance, distribution: priorityCount }
+}
+
+const analyzePhaseOptimization = (dataSet: any) => {
+  const phaseCapacity: { [phase: number]: number } = {}
+  const phaseDemand: { [phase: number]: number } = {}
+
+  // Calculate capacity
+  dataSet.workers.forEach((worker: { AvailableSlots: any; MaxLoadPerPhase: string }) => {
+    const slots = parseArrayField(worker.AvailableSlots)
+    const maxLoad = Number.parseInt(worker.MaxLoadPerPhase) || 0
+    slots.forEach((phase) => {
+      const phaseNum = Number(phase)
+      if (!isNaN(phaseNum)) {
+        phaseCapacity[phaseNum] = (phaseCapacity[phaseNum] || 0) + maxLoad
+      }
+    })
+  })
+
+  // Calculate demand
+  dataSet.tasks.forEach((task: { Duration: string; PreferredPhases: any }) => {
+    const duration = Number.parseInt(task.Duration) || 0
+    const preferredPhases = parseArrayField(task.PreferredPhases)
+    if (preferredPhases.length > 0) {
+      preferredPhases.forEach((phase) => {
+        const phaseNum = Number(phase)
+        if (!isNaN(phaseNum)) {
+          phaseDemand[phaseNum] = (phaseDemand[phaseNum] || 0) + duration
+        }
+      })
+    }
+  })
+
+  const bottlenecks = Object.keys(phaseDemand)
+    .filter((phase) => (phaseDemand[Number(phase)] || 0) > (phaseCapacity[Number(phase)] || 0))
+    .map(Number)
+
+  return { bottlenecks, capacity: phaseCapacity, demand: phaseDemand }
+}
+
+const analyzeResourceUtilization = (dataSet: any) => {
+  const totalCapacity = dataSet.workers.reduce((sum: number, worker: { AvailableSlots: any; MaxLoadPerPhase: string }) => {
+    const slots = parseArrayField(worker.AvailableSlots)
+    const maxLoad = Number.parseInt(worker.MaxLoadPerPhase) || 0
+    return sum + slots.length * maxLoad
+  }, 0)
+
+  const totalDemand = dataSet.tasks.reduce((sum: number, task: { Duration: string }) => {
+    return sum + (Number.parseInt(task.Duration) || 0)
+  }, 0)
+
+  const efficiency = totalCapacity > 0 ? Math.min(totalDemand / totalCapacity, 1) : 0
+
+  return { efficiency, totalCapacity, totalDemand }
 }

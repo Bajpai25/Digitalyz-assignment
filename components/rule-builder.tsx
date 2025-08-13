@@ -367,16 +367,15 @@ export function RuleBuilder({ dataSet }: RuleBuilderProps) {
                       ? ruleTypes.find(
                           (rt) =>
                             rt.type ===
-                            rules
-                              .reduce(
-                                (acc, rule) => {
+                            Object.entries(
+                              rules.reduce(
+                                (acc: Record<string, number>, rule) => {
                                   acc[rule.type] = (acc[rule.type] || 0) + 1
                                   return acc
                                 },
                                 {} as Record<string, number>,
-                              )
-                              .entries()
-                              .reduce((a, b) => (a[1] > b[1] ? a : b))[0],
+                              ),
+                            ).reduce((a: [string, number], b: [string, number]) => (a[1] > b[1] ? a : b))[0],
                         )?.name || "N/A"
                       : "N/A"}
                   </span>
