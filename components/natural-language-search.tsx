@@ -32,6 +32,11 @@ interface NaturalLanguageSearchProps {
   onSearchResults: (results: any[], query: string, conditions: ParsedCondition[]) => void
   activeDataType: "clients" | "workers" | "tasks"
   geminiApiKey?: string
+  headerMappings?: {
+    clients: { [originalField: string]: string }
+    workers: { [originalField: string]: string }
+    tasks: { [originalField: string]: string }
+  }
 }
 
 export function NaturalLanguageSearch({
@@ -39,6 +44,7 @@ export function NaturalLanguageSearch({
   onSearchResults,
   activeDataType,
   geminiApiKey,
+  headerMappings,
 }: NaturalLanguageSearchProps) {
   const [query, setQuery] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -73,25 +79,41 @@ export function NaturalLanguageSearch({
     const conditions: ParsedCondition[] = []
     const lowercaseQuery = query.toLowerCase()
 
-    // Enhanced field mappings with AI-powered synonyms
-    const fieldMappings: { [key: string]: { [key: string]: string } } = {
+    const universalFieldMappings: { [key: string]: { [key: string]: string } } = {
       clients: {
         "priority level": "PriorityLevel",
+        prioritylevel: "PriorityLevel",
         priority: "PriorityLevel",
         importance: "PriorityLevel",
         "client name": "ClientName",
+        clientname: "ClientName",
         name: "ClientName",
         company: "ClientName",
         organization: "ClientName",
+        "client id": "ClientID",
+        clientid: "ClientID",
+        id: "ClientID",
         group: "GroupTag",
         "group tag": "GroupTag",
+        grouptag: "GroupTag",
         category: "GroupTag",
+        team: "GroupTag",
         "requested tasks": "RequestedTaskIDs",
+        requestedtasks: "RequestedTaskIDs",
         tasks: "RequestedTaskIDs",
         requirements: "RequestedTaskIDs",
         budget: "AttributesJSON.budget",
         cost: "AttributesJSON.budget",
         spending: "AttributesJSON.budget",
+        price: "AttributesJSON.budget",
+        location: "AttributesJSON.location",
+        city: "AttributesJSON.location",
+        region: "AttributesJSON.location",
+        vip: "AttributesJSON.vip",
+        premium: "AttributesJSON.vip",
+        important: "AttributesJSON.vip",
+        sla: "AttributesJSON.sla",
+        "service level": "AttributesJSON.sla",
       },
       workers: {
         skills: "Skills",
@@ -99,14 +121,19 @@ export function NaturalLanguageSearch({
         expertise: "Skills",
         capabilities: "Skills",
         competencies: "Skills",
+        technologies: "Skills",
         "available slots": "AvailableSlots",
+        availableslots: "AvailableSlots",
         slots: "AvailableSlots",
         availability: "AvailableSlots",
         phases: "AvailableSlots",
         "max load": "MaxLoadPerPhase",
+        maxload: "MaxLoadPerPhase",
         load: "MaxLoadPerPhase",
         capacity: "MaxLoadPerPhase",
+        workload: "MaxLoadPerPhase",
         "worker group": "WorkerGroup",
+        workergroup: "WorkerGroup",
         group: "WorkerGroup",
         team: "WorkerGroup",
         department: "WorkerGroup",
@@ -114,33 +141,58 @@ export function NaturalLanguageSearch({
         level: "QualificationLevel",
         experience: "QualificationLevel",
         seniority: "QualificationLevel",
+        rank: "QualificationLevel",
+        "worker name": "WorkerName",
+        workername: "WorkerName",
         name: "WorkerName",
+        employee: "WorkerName",
+        "worker id": "WorkerID",
+        workerid: "WorkerID",
+        id: "WorkerID",
+        employeeid: "WorkerID",
       },
       tasks: {
         duration: "Duration",
         length: "Duration",
         time: "Duration",
+        period: "Duration",
+        timeframe: "Duration",
         "required skills": "RequiredSkills",
+        requiredskills: "RequiredSkills",
         skills: "RequiredSkills",
         requirements: "RequiredSkills",
         needs: "RequiredSkills",
+        technologies: "RequiredSkills",
         "preferred phases": "PreferredPhases",
+        preferredphases: "PreferredPhases",
         phases: "PreferredPhases",
         timing: "PreferredPhases",
         schedule: "PreferredPhases",
+        when: "PreferredPhases",
         "max concurrent": "MaxConcurrent",
+        maxconcurrent: "MaxConcurrent",
         concurrent: "MaxConcurrent",
         parallel: "MaxConcurrent",
         simultaneous: "MaxConcurrent",
         category: "Category",
         type: "Category",
         kind: "Category",
+        classification: "Category",
+        "task name": "TaskName",
+        taskname: "TaskName",
         name: "TaskName",
         title: "TaskName",
+        description: "TaskName",
+        "task id": "TaskID",
+        taskid: "TaskID",
+        id: "TaskID",
+        priority: "Priority",
+        importance: "Priority",
+        urgency: "Priority",
+        criticality: "Priority",
       },
     }
 
-    // Enhanced operator mappings with natural language variations
     const operatorMappings: { [key: string]: string } = {
       "greater than": ">",
       "more than": ">",
@@ -148,117 +200,292 @@ export function NaturalLanguageSearch({
       above: ">",
       over: ">",
       exceeds: ">",
+      beyond: ">",
       "less than": "<",
       "fewer than": "<",
       "lower than": "<",
       below: "<",
       under: "<",
+      within: "<",
       "equal to": "=",
       equals: "=",
       is: "=",
       matches: "=",
+      exactly: "=",
+      "same as": "=",
+      "greater than or equal": ">=",
+      "at least": ">=",
+      minimum: ">=",
+      min: ">=",
+      "less than or equal": "<=",
+      "at most": "<=",
+      maximum: "<=",
+      max: "<=",
       contains: "contains",
       includes: "contains",
       has: "contains",
       with: "contains",
       featuring: "contains",
+      having: "contains",
       in: "in",
-      within: "in",
       among: "in",
+      inside: "in",
       not: "not",
       excluding: "not",
       without: "not",
+      except: "not",
+      "starts with": "startswith",
+      "begins with": "startswith",
+      starting: "startswith",
+      "ends with": "endswith",
+      ending: "endswith",
+      concludes: "endswith",
     }
 
-    // Enhanced numeric patterns with better context awareness
+    console.log("Parsing universal query:", lowercaseQuery)
+
     const numericPatterns = [
-      /(\w+(?:\s+\w+)*)\s+(greater than|more than|higher than|above|over|exceeds)\s+(\d+(?:\.\d+)?)/g,
-      /(\w+(?:\s+\w+)*)\s+(less than|fewer than|lower than|below|under)\s+(\d+(?:\.\d+)?)/g,
-      /(\w+(?:\s+\w+)*)\s+(equal to|equals|is|matches)\s+(\d+(?:\.\d+)?)/g,
-      /(\w+(?:\s+\w+)*)\s+of\s+(\d+(?:\.\d+)?)/g, // "priority of 4"
-      /(\w+(?:\s+\w+)*)\s+(\d+(?:\.\d+)?)\s+or\s+(more|higher|greater)/g, // "priority 3 or higher"
+      // Primary pattern: "priority level greater than 3"
+      /(?:all\s+)?(?:\w+\s+)?(?:with\s+)?([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(greater than|more than|higher than|above|over|exceeds|beyond|less than|fewer than|lower than|below|under|within|equal to|equals|is|matches|exactly|same as|at least|minimum|min|at most|maximum|max|greater than or equal|less than or equal)\s+(\d+(?:\.\d+)?)/gi,
+      // Secondary pattern: "duration of 2" or "priority 4"
+      /([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(?:of\s+)?(\d+(?:\.\d+)?)/gi,
+      // Tertiary pattern: "level 3 clients" or "phase 2 tasks"
+      /(?:level|phase|priority|duration)\s+(\d+(?:\.\d+)?)\s+(\w+)/gi,
     ]
 
-    numericPatterns.forEach((pattern) => {
+    numericPatterns.forEach((pattern, patternIndex) => {
       let match
       while ((match = pattern.exec(lowercaseQuery)) !== null) {
-        const fieldName = match[1].trim()
-        const operator = match[2] ? operatorMappings[match[2]] || "=" : "="
-        const value = Number.parseFloat(match[3] || match[2])
+        console.log(`Numeric Pattern ${patternIndex} matched:`, match)
 
-        const mappedField = fieldMappings[activeDataType]?.[fieldName]
+        let fieldName, operator, value
+
+        if (patternIndex === 0 && match.length >= 4) {
+          fieldName = match[1].trim()
+          operator = operatorMappings[match[2].trim()] || "="
+          value = Number.parseFloat(match[3])
+        } else if (patternIndex === 1 && match.length >= 3) {
+          fieldName = match[1].trim()
+          operator = "="
+          value = Number.parseFloat(match[2])
+        } else if (patternIndex === 2 && match.length >= 3) {
+          fieldName = match[0].split(" ")[0] // "level", "phase", etc.
+          operator = "="
+          value = Number.parseFloat(match[1])
+        } else {
+          continue
+        }
+
+        console.log(`Extracted: fieldName="${fieldName}", operator="${operator}", value=${value}`)
+
+        let mappedField =
+          universalFieldMappings[activeDataType]?.[fieldName] ||
+          universalFieldMappings[activeDataType]?.[fieldName.replace(/\s+/g, "")] ||
+          universalFieldMappings[activeDataType]?.[fieldName.replace(/\s+/g, "").toLowerCase()]
+
+        if (!mappedField) {
+          // Universal fallback mappings
+          const universalMappings: { [key: string]: string } = {
+            priority: "PriorityLevel",
+            level: "PriorityLevel",
+            importance: "PriorityLevel",
+            name:
+              activeDataType === "clients" ? "ClientName" : activeDataType === "workers" ? "WorkerName" : "TaskName",
+            id: activeDataType === "clients" ? "ClientID" : activeDataType === "workers" ? "WorkerID" : "TaskID",
+            duration: "Duration",
+            time: "Duration",
+            length: "Duration",
+            skills: activeDataType === "workers" ? "Skills" : "RequiredSkills",
+            group: activeDataType === "clients" ? "GroupTag" : "WorkerGroup",
+            phases: activeDataType === "workers" ? "AvailableSlots" : "PreferredPhases",
+            load: "MaxLoadPerPhase",
+            capacity: "MaxLoadPerPhase",
+            concurrent: "MaxConcurrent",
+            parallel: "MaxConcurrent",
+            category: "Category",
+            type: "Category",
+            qualification: "QualificationLevel",
+            experience: "QualificationLevel",
+          }
+          mappedField = universalMappings[fieldName] || universalMappings[fieldName.split(" ").pop() || ""]
+        }
+
+        console.log(`Mapped field: ${fieldName} -> ${mappedField}`)
+
         if (mappedField && !isNaN(value)) {
           conditions.push({
             field: mappedField,
-            operator,
+            operator: operator ?? "=",
             value,
             type: "numeric",
           })
+          console.log(`Added numeric condition:`, { field: mappedField, operator, value, type: "numeric" })
+          break
         }
       }
     })
 
-    // Enhanced string/array patterns with better context understanding
     const stringPatterns = [
-      /(\w+(?:\s+\w+)*)\s+(contains|includes|has|with|featuring)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
-      /(\w+(?:\s+\w+)*)\s+(requiring|needing|requesting)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
-      /(\w+(?:\s+\w+)*)\s+(skilled in|capable of|experienced in)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
-      /(\w+(?:\s+\w+)*)\s+(named|called|titled)\s+([^,\s]+(?:\s+[^,\s]+)*)/g,
+      // "skills contains Python" or "name includes John"
+      /([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(contains|includes|has|with|featuring|having)\s+([^,\s]+(?:\s+[^,\s]+)*)/gi,
+      // "workers requiring Python" or "tasks needing JavaScript"
+      /(\w+)\s+(requiring|needing|requesting|demanding)\s+([^,\s]+(?:\s+[^,\s]+)*)/gi,
+      // "Python skilled workers" or "JavaScript developers"
+      /([^,\s]+(?:\s+[^,\s]+)*)\s+(skilled|experienced|capable)\s+(\w+)/gi,
+      // "named John" or "called Project Alpha"
+      /(?:named|called|titled)\s+([^,\s]+(?:\s+[^,\s]+)*)/gi,
+      // "in GroupA" or "from TeamB"
+      /(?:in|from|of)\s+(Group[A-Z]|Team[A-Z]|\w+Group|\w+Team)/gi,
     ]
 
-    stringPatterns.forEach((pattern) => {
+    stringPatterns.forEach((pattern, patternIndex) => {
       let match
       while ((match = pattern.exec(lowercaseQuery)) !== null) {
-        const fieldName = match[1].trim()
-        const operator = "contains"
-        const value = match[3].trim().replace(/['"]/g, "")
+        console.log(`String Pattern ${patternIndex} matched:`, match)
 
-        const mappedField = fieldMappings[activeDataType]?.[fieldName]
-        if (mappedField) {
+        let fieldName, operator, value
+
+        if (patternIndex === 0) {
+          fieldName = match[1].trim()
+          operator = "contains"
+          value = match[3].trim().replace(/['"]/g, "")
+        } else if (patternIndex === 1) {
+          fieldName = activeDataType === "workers" ? "Skills" : "RequiredSkills"
+          operator = "contains"
+          value = match[3].trim().replace(/['"]/g, "")
+        } else if (patternIndex === 2) {
+          fieldName = activeDataType === "workers" ? "Skills" : "RequiredSkills"
+          operator = "contains"
+          value = match[1].trim().replace(/['"]/g, "")
+        } else if (patternIndex === 3) {
+          fieldName =
+            activeDataType === "clients" ? "ClientName" : activeDataType === "workers" ? "WorkerName" : "TaskName"
+          operator = "contains"
+          value = match[1].trim().replace(/['"]/g, "")
+        } else if (patternIndex === 4) {
+          fieldName = activeDataType === "clients" ? "GroupTag" : "WorkerGroup"
+          operator = "contains"
+          value = match[1].trim().replace(/['"]/g, "")
+        }
+
+        const mappedField =
+          activeDataType && universalFieldMappings[activeDataType] && fieldName
+            ? universalFieldMappings[activeDataType][fieldName]
+            : fieldName
+        if (mappedField && value) {
           conditions.push({
             field: mappedField,
-            operator,
+            operator: operator ?? "=",
             value,
             type: "string",
+          })
+          console.log(`Added string condition:`, { field: mappedField, operator, value, type: "string" })
+        }
+      }
+    })
+
+    const arrayPatterns = [
+      // "in phases 1, 2, 3" or "available in slots 1 and 2"
+      /(?:in|during|within|available in)\s+(?:phases?|slots?)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/gi,
+      // "phases 1, 2, 3" or "slots 1 and 2"
+      /(?:phases?|slots?)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/gi,
+      // "requesting tasks T1, T2, T3"
+      /(?:requesting|needing|requiring)\s+(?:tasks?)\s+([T]\d+(?:,\s*[T]\d+)*)/gi,
+      // "with skills Python, JavaScript, SQL"
+      /(?:with|having)\s+(?:skills?)\s+([a-zA-Z]+(?:,\s*[a-zA-Z]+)*)/gi,
+    ]
+
+    arrayPatterns.forEach((pattern, patternIndex) => {
+      let match
+      while ((match = pattern.exec(lowercaseQuery)) !== null) {
+        console.log(`Array Pattern ${patternIndex} matched:`, match)
+
+        let fieldName, values
+
+        if (patternIndex <= 1) {
+          fieldName = activeDataType === "workers" ? "AvailableSlots" : "PreferredPhases"
+          values = match[1]
+            .replace(/(?:and|or)/g, ",")
+            .split(",")
+            .map((v) => v.trim())
+            .filter((v) => v && !isNaN(Number(v)))
+            .map(Number)
+        } else if (patternIndex === 2) {
+          fieldName = "RequestedTaskIDs"
+          values = match[1]
+            .split(",")
+            .map((v) => v.trim())
+            .filter((v) => v)
+        } else if (patternIndex === 3) {
+          fieldName = activeDataType === "workers" ? "Skills" : "RequiredSkills"
+          values = match[1]
+            .split(",")
+            .map((v) => v.trim())
+            .filter((v) => v)
+        }
+
+        if (fieldName && values && values.length > 0) {
+          conditions.push({
+            field: fieldName,
+            operator: "in",
+            value: values,
+            type: "array",
+          })
+          console.log(`Added array condition:`, { field: fieldName, operator: "in", value: values, type: "array" })
+        }
+      }
+    })
+
+    const booleanPatterns = [
+      // "vip clients" or "premium users"
+      /(vip|premium|important|critical|urgent|active|inactive)\s+(\w+)/gi,
+      // "clients that are vip" or "workers who are senior"
+      /(\w+)\s+(?:that are|who are|which are)\s+(vip|premium|senior|junior|active|inactive)/gi,
+    ]
+
+    booleanPatterns.forEach((pattern, patternIndex) => {
+      let match
+      while ((match = pattern.exec(lowercaseQuery)) !== null) {
+        console.log(`Boolean Pattern ${patternIndex} matched:`, match)
+
+        let fieldName, value
+
+        if (patternIndex === 0) {
+          fieldName =
+            match[1] === "vip" || match[1] === "premium"
+              ? "AttributesJSON.vip"
+              : match[1] === "senior"
+                ? "QualificationLevel"
+                : match[1]
+          value = match[1] === "senior" ? "Senior" : match[1] === "junior" ? "Junior" : true
+        } else if (patternIndex === 1) {
+          fieldName =
+            match[2] === "vip" || match[2] === "premium"
+              ? "AttributesJSON.vip"
+              : match[2] === "senior"
+                ? "QualificationLevel"
+                : match[2]
+          value = match[2] === "senior" ? "Senior" : match[2] === "junior" ? "Junior" : true
+        }
+
+        if (fieldName) {
+          conditions.push({
+            field: fieldName,
+            operator: "=",
+            value,
+            type: typeof value === "boolean" ? "boolean" : "string",
+          })
+          console.log(`Added boolean condition:`, {
+            field: fieldName,
+            operator: "=",
+            value,
+            type: typeof value === "boolean" ? "boolean" : "string",
           })
         }
       }
     })
 
-    // Enhanced array patterns with better phase and list handling
-    const arrayPatterns = [
-      /(?:in|during|within)\s+(\w+(?:\s+\w+)*)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/g,
-      /(\w+(?:\s+\w+)*)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/g,
-      /(?:phases?|slots?)\s+([\d,\s]+(?:\s+(?:and|or)\s+\d+)*)/g,
-    ]
-
-    arrayPatterns.forEach((pattern) => {
-      let match
-      while ((match = pattern.exec(lowercaseQuery)) !== null) {
-        const fieldName = match[1]?.trim() || "phases"
-        const valueString = match[2] || match[1]
-        const values = valueString
-          .replace(/(?:and|or)/g, ",")
-          .split(",")
-          .map((v) => v.trim())
-          .filter((v) => v && !isNaN(Number(v)))
-          .map(Number)
-
-        if (values.length > 0) {
-          const mappedField =
-            fieldMappings[activeDataType]?.[fieldName] || (fieldName === "phases" ? "PreferredPhases" : null)
-          if (mappedField) {
-            conditions.push({
-              field: mappedField,
-              operator: "in",
-              value: values,
-              type: "array",
-            })
-          }
-        }
-      }
-    })
-
+    console.log("Final universal parsed conditions:", conditions)
     return conditions
   }
 
@@ -308,24 +535,135 @@ Focus on understanding the user's intent and mapping it to the available data fi
 
   const executeSearch = (conditions: ParsedCondition[]) => {
     const currentData = dataSet[activeDataType] || []
+    const currentMappings = headerMappings?.[activeDataType] || {}
+
+    console.log(`Starting search on ${currentData.length} ${activeDataType} records`) // Debug logging
+    console.log("Search conditions:", conditions) // Debug logging
+    console.log("Available header mappings:", currentMappings) // Debug logging
+
+    if (currentData.length > 0) {
+      console.log("Sample data structure:", Object.keys(currentData[0])) // Debug logging
+      console.log("Sample data values:", currentData[0]) // Debug logging
+    }
+
+    const reverseMappings: { [mappedField: string]: string } = {}
+    Object.entries(currentMappings).forEach(([original, mapped]) => {
+      reverseMappings[mapped] = original
+    })
+    console.log("Reverse mappings:", reverseMappings) // Debug logging
 
     const filteredResults = currentData.filter((item) => {
-      return conditions.every((condition) => {
-        const fieldValue = getNestedValue(item, condition.field)
+      const itemMatches = conditions.every((condition) => {
+        let fieldValue = undefined
+        let actualFieldName = condition.field
 
+        // Check if this is a mapped field name that needs to be converted back to original
+        if (reverseMappings[condition.field]) {
+          actualFieldName = reverseMappings[condition.field]
+          fieldValue = getNestedValue(item, actualFieldName)
+          console.log(`Using reverse mapping: ${condition.field} -> ${actualFieldName} = ${fieldValue}`) // Debug logging
+        }
+
+        // If not found, try the field name as-is
+        if (fieldValue === undefined) {
+          fieldValue = getNestedValue(item, condition.field)
+          if (fieldValue !== undefined) {
+            console.log(`Found field value using direct field name: ${condition.field} = ${fieldValue}`) // Debug logging
+          }
+        }
+
+        // If still not found, try alternative field names
+        if (fieldValue === undefined) {
+          const fieldMappings: { [key: string]: string[] } = {
+            PriorityLevel: ["Priori", "Priority", "priority", "priorityLevel"],
+            ClientName: ["Name", "name", "clientName"],
+            WorkerName: ["Name", "name", "workerName"],
+            TaskName: ["Name", "name", "taskName"],
+            ClientID: ["ID", "id", "clientId"],
+            WorkerID: ["ID", "id", "workerId"],
+            TaskID: ["ID", "id", "taskId"],
+            GroupTag: ["Group", "group", "groupTag"],
+            WorkerGroup: ["Group", "group", "workerGroup"],
+            Skills: ["skills", "skill"],
+            RequiredSkills: ["RequiredSkill", "requiredSkill", "skills", "skill"],
+            AvailableSlots: ["Slots", "slots", "availableSlots"],
+            PreferredPhases: ["Phases", "phases", "preferredPhases"],
+            RequestedTaskIDs: ["RequestedTasks", "requestedTasks", "tasks"],
+            Duration: ["duration"],
+            MaxConcurrent: ["maxConcurrent", "concurrent"],
+            MaxLoadPerPhase: ["MaxLoad", "maxLoad", "load"],
+            QualificationLevel: ["Qualification", "qualification", "level"],
+            AttributesJSON: ["AttributesJSON"],
+          }
+
+          const possibleFields = fieldMappings[condition.field] || []
+          console.log(`Field ${condition.field} not found, trying alternatives:`, possibleFields) // Debug logging
+
+          for (const altField of possibleFields) {
+            fieldValue = getNestedValue(item, altField)
+            if (fieldValue !== undefined) {
+              console.log(`Found field value using alternative field name: ${altField} = ${fieldValue}`) // Debug logging
+              break
+            }
+          }
+
+          // Final fallback - direct property access
+          if (fieldValue === undefined) {
+            fieldValue = item[condition.field]
+            if (fieldValue !== undefined) {
+              console.log(`Found field value using direct access: ${condition.field} = ${fieldValue}`) // Debug logging
+            }
+          }
+        }
+
+        console.log(
+          `Checking condition: ${condition.field} ${condition.operator} ${condition.value}, actual value: ${fieldValue} (type: ${typeof fieldValue})`,
+        ) // Debug logging
+
+        // Return false if field not found
+        if (fieldValue === undefined || fieldValue === null) {
+          console.log(`Field ${condition.field} not found in item, returning false`) // Debug logging
+          return false
+        }
+
+        // Handle different condition types
         switch (condition.type) {
           case "numeric":
             const numValue = Number(fieldValue)
+            const conditionValue = Number(condition.value)
+
+            console.log(`Numeric comparison: ${numValue} ${condition.operator} ${conditionValue}`) // Debug logging
+
+            if (isNaN(numValue) || isNaN(conditionValue)) {
+              console.log(`NaN detected: numValue=${numValue}, conditionValue=${conditionValue}`) // Debug logging
+              return false
+            }
+
+            let result = false
             switch (condition.operator) {
               case ">":
-                return numValue > condition.value
+                result = numValue > conditionValue
+                break
               case "<":
-                return numValue < condition.value
+                result = numValue < conditionValue
+                break
               case "=":
-                return numValue === condition.value
+              case "==":
+              case "===":
+                result = numValue === conditionValue
+                break
+              case ">=":
+                result = numValue >= conditionValue
+                break
+              case "<=":
+                result = numValue <= conditionValue
+                break
               default:
-                return false
+                result = false
             }
+
+            console.log(`${numValue} ${condition.operator} ${conditionValue} = ${result}`) // Debug logging
+            return result
 
           case "string":
             const strValue = String(fieldValue || "").toLowerCase()
@@ -333,22 +671,52 @@ Focus on understanding the user's intent and mapping it to the available data fi
             switch (condition.operator) {
               case "contains":
                 return strValue.includes(searchValue)
-              default:
+              case "=":
+              case "==":
+              case "===":
                 return strValue === searchValue
+              default:
+                return strValue.includes(searchValue)
             }
 
           case "array":
             if (condition.operator === "in") {
               const arrayValue = parseArrayField(fieldValue)
-              return condition.value.some((val: any) => arrayValue.includes(val))
+              return condition.value.some(
+                (val: any) => arrayValue.includes(Number(val)) || arrayValue.includes(String(val)),
+              )
             }
             return false
+
+          case "boolean":
+            const boolValue = Boolean(fieldValue)
+            const conditionBoolValue = Boolean(condition.value)
+            return boolValue === conditionBoolValue
 
           default:
             return true
         }
       })
+
+      if (conditions.length > 0) {
+        console.log(`Item ${item.ClientID || item.WorkerID || item.TaskID || "unknown"} matches: ${itemMatches}`) // Debug logging
+      }
+
+      return itemMatches
     })
+
+    console.log(`Filtered results: ${filteredResults.length} out of ${currentData.length}`) // Debug logging
+
+    if (filteredResults.length > 0 && filteredResults.length < 50) {
+      console.log(
+        "Matching items:",
+        filteredResults.map((item) => ({
+          id: item.ClientID || item.WorkerID || item.TaskID || item.ID || item.id,
+          priority: item.PriorityLevel || item.Priori || item.Priority || item.priority,
+          name: item.ClientName || item.WorkerName || item.TaskName || item.Name || item.name,
+        })),
+      )
+    }
 
     return filteredResults
   }
@@ -402,11 +770,9 @@ Focus on understanding the user's intent and mapping it to the available data fi
           let parsedResponse
 
           if (geminiResponse && typeof geminiResponse === "object") {
-            // Handle the response structure: { text: "\`\`\`json\n{...}\n\`\`\`", type: "text", success: true }
             const responseText = geminiResponse.text || geminiResponse.response || geminiResponse
 
             if (typeof responseText === "string") {
-              // Extract JSON from markdown code blocks if present
               const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/\{[\s\S]*\}/)
               if (jsonMatch) {
                 try {
@@ -420,7 +786,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
               parsedResponse = responseText
             }
           } else if (typeof geminiResponse === "string") {
-            // Handle direct string response
             const jsonMatch = geminiResponse.match(/```json\s*([\s\S]*?)\s*```/) || geminiResponse.match(/\{[\s\S]*\}/)
             if (jsonMatch) {
               try {
@@ -436,10 +801,12 @@ Focus on understanding the user's intent and mapping it to the available data fi
             conditions = parsedResponse.conditions.map((condition: any) => ({
               field: condition.field,
               operator: condition.operator,
-              value: condition.value,
+              value: condition.type === "numeric" ? Number(condition.value) : condition.value,
               type: condition.type as "numeric" | "string" | "array" | "boolean",
             }))
             aiEnhanced = true
+
+            console.log("Parsed Gemini conditions:", conditions) // Debug logging
 
             if (parsedResponse.explanation) {
               console.log("Gemini explanation:", parsedResponse.explanation)
@@ -448,16 +815,14 @@ Focus on understanding the user's intent and mapping it to the available data fi
               console.log("Gemini suggestions:", parsedResponse.suggestions)
             }
           } else {
-            // Fallback to local parsing
+            console.log("Gemini response parsing failed, using local parsing") // Debug logging
             conditions = parseNaturalLanguage(query)
           }
         } catch (error) {
           console.error("Gemini API error:", error)
-          // Fallback to local parsing
           conditions = parseNaturalLanguage(query)
         }
       } else {
-        // Use local parsing
         await new Promise((resolve) => setTimeout(resolve, 800))
         conditions = parseNaturalLanguage(query)
       }
@@ -465,7 +830,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
       setParsedQuery(conditions)
       const results = executeSearch(conditions)
 
-      // Add to search history
       const searchQuery: SearchQuery = {
         id: Date.now().toString(),
         query,
@@ -517,7 +881,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Main Search Input */}
         <div className="space-y-2">
           <div className="flex gap-2">
             <div className="flex-1 relative">
@@ -557,7 +920,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
           </Button>
         </div>
 
-        {/* Sample Queries */}
         <div className="space-y-2">
           <p className="text-sm font-medium text-gray-700">Try these examples:</p>
           <div className="flex flex-wrap gap-2">
@@ -575,7 +937,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
           </div>
         </div>
 
-        {/* Parsed Query Display */}
         {parsedQuery.length > 0 && (
           <Alert>
             <Brain className="h-4 w-4" />
@@ -603,7 +964,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
           </Alert>
         )}
 
-        {/* Advanced Search Options */}
         {showAdvanced && (
           <Card className="bg-gray-50">
             <CardHeader className="pb-3">
@@ -632,7 +992,6 @@ Focus on understanding the user's intent and mapping it to the available data fi
           </Card>
         )}
 
-        {/* Search History */}
         {searchHistory.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium text-gray-700">Recent Searches:</p>

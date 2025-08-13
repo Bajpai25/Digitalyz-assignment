@@ -19,6 +19,11 @@ interface DataGridProps {
   }
   onDataChange: (dataSet: any) => void
   geminiApiKey: string
+  headerMappings: {
+    clients: { [originalField: string]: string }
+    workers: { [originalField: string]: string }
+    tasks: { [originalField: string]: string }
+  }
 }
 
 interface ParsedCondition {
@@ -28,7 +33,7 @@ interface ParsedCondition {
   type: "numeric" | "string" | "array" | "boolean"
 }
 
-export function DataGrid({ dataSet, onDataChange, geminiApiKey }: DataGridProps) {
+export function DataGrid({ dataSet, onDataChange, geminiApiKey, headerMappings }: DataGridProps) {
   const [activeDataType, setActiveDataType] = useState<"clients" | "workers" | "tasks">("clients")
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   const [editValue, setEditValue] = useState("")
@@ -169,6 +174,7 @@ export function DataGrid({ dataSet, onDataChange, geminiApiKey }: DataGridProps)
         onSearchResults={handleNaturalLanguageResults}
         activeDataType={activeDataType}
         geminiApiKey={geminiApiKey}
+        headerMappings={headerMappings}
       />
 
       {/* Data Grid */}
@@ -265,7 +271,7 @@ export function DataGrid({ dataSet, onDataChange, geminiApiKey }: DataGridProps)
                         <TableRow>
                           {columns.map((column) => (
                             <TableHead key={column} className="font-semibold">
-                              {column}
+                              {headerMappings[type]?.[column] || column}
                             </TableHead>
                           ))}
                           <TableHead className="w-20">Actions</TableHead>

@@ -19,6 +19,12 @@ interface DataSet {
   tasks: any[]
 }
 
+interface HeaderMappings {
+  clients: { [originalField: string]: string }
+  workers: { [originalField: string]: string }
+  tasks: { [originalField: string]: string }
+}
+
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("upload")
   const [dataSet, setDataSet] = useState<DataSet>({
@@ -29,12 +35,26 @@ export default function DashboardPage() {
   const [validationResults, setValidationResults] = useState<any[]>([])
   const [geminiApiKey, setGeminiApiKey] = useState("")
   const [searchResults, setSearchResults] = useState<any[]>([])
+  const [headerMappings, setHeaderMappings] = useState<HeaderMappings>({
+    clients: {},
+    workers: {},
+    tasks: {},
+  })
 
-  const handleDataUploaded = (type: keyof DataSet, data: any[]) => {
+  const handleDataUploaded = (type: keyof DataSet, data: any[], mappings?: { [key: string]: string }) => {
     setDataSet((prev) => ({
       ...prev,
       [type]: data,
     }))
+
+    // Store header mappings for search functionality
+    if (mappings) {
+      setHeaderMappings((prev) => ({
+        ...prev,
+        [type]: mappings,
+      }))
+    }
+
     // Auto-switch to data view after upload
     if (data.length > 0) {
       setActiveTab("data")
@@ -103,7 +123,7 @@ export default function DashboardPage() {
               Gemini AI
             </TabsTrigger>
             <TabsTrigger value="export" className="flex items-center gap-2" disabled={!hasData}>
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4 mr-2" />
               Export
             </TabsTrigger>
           </TabsList>
@@ -115,7 +135,12 @@ export default function DashboardPage() {
           <TabsContent value="data" className="space-y-6">
             <div className="grid lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
-                <DataGrid dataSet={dataSet} onDataChange={setDataSet} geminiApiKey={geminiApiKey} />
+                <DataGrid
+                  dataSet={dataSet}
+                  onDataChange={setDataSet}
+                  geminiApiKey={geminiApiKey}
+                  headerMappings={headerMappings}
+                />
               </div>
               <div>
                 <ValidationPanel
