@@ -68,13 +68,13 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
                 <Brain className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Data Alchemist</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-900">Data Alchemist</h1>
                 <p className="text-sm text-slate-600">AI-Powered Resource Allocation Configurator</p>
               </div>
             </div>
@@ -101,7 +101,7 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+         <TabsList className="grid h-auto w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="w-4 h-4" />
               Upload
@@ -133,7 +133,7 @@ export default function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="data" className="space-y-6">
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
                 <DataGrid
                   dataSet={dataSet}

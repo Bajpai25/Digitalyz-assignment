@@ -204,7 +204,8 @@ export function DataGrid({ dataSet, onDataChange, geminiApiKey, headerMappings }
               clearAllFilters() // Clear filters when switching tabs
             }}
           >
-            <div className="flex items-center justify-between mb-4">
+           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+             <div className="w-full overflow-x-auto">
               <TabsList>
                 {(["clients", "workers", "tasks"] as const).map((type) => {
                   const info = getDataTypeInfo(type)
@@ -216,16 +217,17 @@ export function DataGrid({ dataSet, onDataChange, geminiApiKey, headerMappings }
                   )
                 })}
               </TabsList>
+              </div>
 
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
                 {/* Traditional Search */}
-                <div className="relative">
+                <div className="relative w-full sm:w-auto">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                   <Input
                     placeholder="Quick search..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 w-48"
+                    className="pl-10 w-full sm:w-48"
                     disabled={isNaturalLanguageActive}
                   />
                 </div>
